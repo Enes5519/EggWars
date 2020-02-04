@@ -8,7 +8,9 @@ use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\block\SignChangeEvent;
 use pocketmine\event\entity\EntityDamageByEntityEvent;
 use pocketmine\event\entity\EntityDamageEvent;
+use pocketmine\event\entity\EntityLevelChangeEvent;
 use pocketmine\event\Listener;
+use pocketmine\event\player\PlayerChatEvent;
 use pocketmine\event\player\PlayerDropItemEvent;
 use pocketmine\event\player\PlayerInteractEvent;
 use pocketmine\event\player\PlayerQuitEvent;
@@ -18,6 +20,8 @@ use pocketmine\tile\Sign;
 use pocketmine\utils\TextFormat;
 
 class EventListener implements Listener{
+	public const CHAT_FORMAT_ALL = TextFormat::DARK_GRAY . '[!] %s' . TextFormat::DARK_GRAY . ' > ' . TextFormat::WHITE . '%s';
+	public const CHAT_FORMAT_TEAM = TextFormat::DARK_GRAY . '%s' . TextFormat::DARK_GRAY . ' > ' . TextFormat::WHITE . '%s';
 
 	/** @var EggWars */
 	private $api;
@@ -161,7 +165,7 @@ class EventListener implements Listener{
 						if($dead){
 							if($arena->isBrokenEgg($player)){
 								$arena->quit($player, false);
-								$player->addTitle(TextFormat::RED . 'ELENDİN!');
+								$player->addTitle(TextFormat::RED . 'Elendin!');
 							}else{
 								$arena->teleportToBase($player);
 							}
@@ -176,12 +180,52 @@ class EventListener implements Listener{
 				if($dead){
 					if($arena->isBrokenEgg($player)){
 						$arena->quit($player, false);
-						$player->addTitle(TextFormat::RED . 'ELENDİN!');
+						$player->addTitle(TextFormat::RED . 'Elendi');
 					}else{
 						$event->setCancelled();
 						$arena->teleportToBase($player);
 					}
 					$arena->broadcastMessage($player->getDisplayName() . ' öldü.');
+				}
+			}
+		}
+	}
+
+	/**
+	 * @param PlayerChatEvent $event
+	 * @ignoreCancelled true
+	 */
+	public function onChat(PlayerChatEvent $event) : void{
+		$player = $event->getPlayer();
+
+		if(($arena = $this->api->getPlayerArena($player)) !== null){
+			$message = $event->getMessage();
+			$all = false;
+			if(substr($message, 0, 1) === '!'){
+				$message = substr($message, 1);
+				$all = true;
+			}
+
+			if($all){
+				$arena->chat(sprintf(self::CHAT_FORMAT_ALL, $player->getDisplayName(), $message));
+			}else{
+				$arena->chat(sprintf(self::CHAT_FORMAT_TEAM, $player->getDisplayName(), $message), $arena->getTeam($player));
+			}
+			$event->setCancelled();
+		}
+	}
+
+	/**
+	 * @param EntityLevelChangeEvent $event
+	 * @ignoreCancelled
+	 */
+	public function onLevelChange(EntityLevelChangeEvent $event) : void{
+		$player = $event->getEntity();
+
+		if($player instanceof Player){
+			if(($arena = $this->api->getPlayerArena($player)) !== null){
+				if($arena->getStatus() === Arena::STATUS_GAME){
+					$arena->quit($player);
 				}
 			}
 		}

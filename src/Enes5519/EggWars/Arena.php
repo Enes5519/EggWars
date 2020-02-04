@@ -213,13 +213,19 @@ class Arena{
 				$player->sendMessage(EggWars::PREFIX . 'Oyun bitti. Kazanan yok.');
 				$this->quit($player, false);
 			}
+
+			Server::getInstance()->broadcastMessage(EggWars::PREFIX . $this->getName() . ' arenasının oyunu bitti.');
 		}else{
+			$team = '';
 			foreach($this->players as $playerData){
 				/** @var Player $player */
 				$player = $playerData['player'];
-				$player->addTitle(TextFormat::GREEN . 'KAZANDIN!');
+				$team = $playerData['team'];
+				$player->addTitle(TextFormat::GREEN . 'Kazandın');
 				$this->quit($player, false);
 			}
+
+			Server::getInstance()->broadcastMessage(EggWars::PREFIX . $this->getName() . ' arenasını ' . self::TEAMS[$team][0] . $team . TextFormat::GRAY . ' takımı kazandı.');
 		}
 	}
 
@@ -350,6 +356,17 @@ class Arena{
 			/** @var Player $player */
 			$player = $data['player'];
 			$player->sendMessage(EggWars::PREFIX . $message);
+		}
+	}
+
+	public function chat(string $message, string $team = null) : void{
+		foreach($this->players as $data){
+			/** @var Player $player */
+			$player = $data['player'];
+
+			if($team === null or $data['team'] === $team){
+				$player->sendMessage($message);
+			}
 		}
 	}
 
