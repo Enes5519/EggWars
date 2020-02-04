@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Enes5519\EggWars;
+namespace Enes5519\EggWars\task;
 
+use Enes5519\EggWars\EggWars;
 use pocketmine\level\Level;
 use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;

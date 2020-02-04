@@ -6,6 +6,7 @@ namespace Enes5519\EggWars;
 
 use dktapps\pmforms\MenuForm;
 use dktapps\pmforms\MenuOption;
+use Enes5519\EggWars\task\MapResetAsyncTask;
 use pocketmine\form\Form;
 use pocketmine\item\ItemFactory;
 use pocketmine\item\ItemIds;
@@ -87,6 +88,10 @@ class Arena{
 		$this->maxPlayers = $this->teamCount * $this->perTeamPlayerCount;
 	}
 
+	public function getName() : string{
+		return $this->arenaLevel->getFolderName();
+	}
+
 	/**
 	 * @return array
 	 */
@@ -145,6 +150,7 @@ class Arena{
 
 				if(count($getTeams) <= 1){
 					$this->finish(array_shift($getTeams));
+					return;
 				}
 
 				--$this->time;
@@ -162,10 +168,11 @@ class Arena{
 	}
 
 	public function restartCompleted() : void{
-		$this->status = self::STATUS_LOBBY;
 		$this->restarted = false;
 		$this->teams = array_map(function(){ return 0; }, array_flip($this->teams));
+		$this->brokenEggs = [];
 		$this->time = 60;
+		$this->status = self::STATUS_LOBBY;
 
 		foreach($this->waitingLobby->getEntities() as $entity){
 			$entity->flagForDespawn();
@@ -186,7 +193,7 @@ class Arena{
 			foreach($this->players as $playerData){
 				/** @var Player $player */
 				$player = $playerData['player'];
-				$player->sendMessage(EggWars::PREFIX . TextFormat::GREEN . 'KAZANDIN!');
+				$player->addTitle(TextFormat::GREEN . 'KAZANDIN!');
 				$this->quit($player, false);
 			}
 		}
@@ -214,24 +221,30 @@ class Arena{
 			'team' => $team,
 		];
 		++$this->teams[$team];
+		$player->setDisplayName(self::TEAMS[$team][0] . $player->getName());
+		$player->setNameTag($player->getDisplayName());
 
-		$this->resetPlayer($player);
+		$this->resetPlayer($player, false);
 
 		$player->getInventory()->setItem(0, (ItemFactory::get(ItemIds::MAGMA_CREAM))->setCustomName(TextFormat::RESET . TextFormat::BLUE . 'Takım Değiştir'));
 		$player->getInventory()->setItem(8, (ItemFactory::get(ItemIds::OAK_DOOR))->setCustomName(TextFormat::RESET . TextFormat::RED . 'Oyundan Çık'));
 		$player->teleport($this->waitingLobby->getSpawnLocation());
 
-		$this->broadcastMessage(TextFormat::YELLOW . $player->getName() . TextFormat::GRAY . ' oyuna katıldı. [' . count($this->players) . '/' . $this->maxPlayers . ']');
+		$this->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ' oyuna katıldı. [' . count($this->players) . '/' . $this->maxPlayers . ']');
 	}
 
 	public function quit(Player $player, bool $message = true) : void{
 		--$this->teams[$this->players[$player->getLowerCaseName()]];
 		unset($this->players[$player->getLowerCaseName()]);
 
-		$this->resetPlayer($player);
+		if($message) $this->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ' oyundan ayrıldı.');
 
+		$this->resetPlayer($player);
 		$player->teleport($player->getServer()->getDefaultLevel()->getSpawnLocation());
-		if($message) $this->broadcastMessage(TextFormat::RED . $player->getName() . TextFormat::GRAY . ' oyundan ayrıldı.');
+	}
+
+	public function isBrokenEgg(Player $player) : bool{
+		return isset($this->brokenEggs[$this->getTeam($player)]);
 	}
 
 	public function inArena(Player $player) : bool{
@@ -246,7 +259,8 @@ class Arena{
 		foreach($this->eggPositions as $team => $position){
 			if($position->equals($pos)){
 				if($team !== $this->getTeam($player)){
-					/// TODO
+					$this->brokenEggs[$team] = true;
+					$this->broadcastMessage($player->getName() . ', ' . self::TEAMS[$team][0] . $team . TextFormat::GRAY . ' takımın yumurtasını kırdı.');
 					break;
 				}else{
 					$player->sendMessage(EggWars::PREFIX . 'Kendi yumurtanı kıramazsın.');
@@ -275,10 +289,15 @@ class Arena{
 		return $this->players[$player->getLowerCaseName()]['team'] ?? 'Bilinmeyen';
 	}
 
-	public function resetPlayer(Player $player) : void{
+	public function resetPlayer(Player $player, bool $nameTag = true) : void{
 		$player->setFood($player->getMaxFood());
 		$player->setHealth($player->getMaxHealth());
 		$player->getInventory()->clearAll();
+
+		if($nameTag){
+			$player->setNameTag($player->getName());
+			$player->setDisplayName($player->getName());
+		}
 	}
 
 	public function broadcastMessage(string $message) : void{
@@ -310,6 +329,13 @@ class Arena{
 				$this->changeTeam($player, array_keys($this->teams)[$selectedOption]);
 			}
 		});
+	}
+
+	public function delete() : void{
+		unlink(EggWars::getArenasPath() . $this->getName() . '.yml');
+		unlink(EggWars::getZipWorldPath() . $this->getName() . '.zip');
+
+		unset($this);
 	}
 
 	public static function fromArray(string $arenaName, array $data) : Arena{

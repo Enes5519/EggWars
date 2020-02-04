@@ -64,7 +64,20 @@ class EggWarsCommand extends Command{
 							$player->sendMessage(EggWars::PREFIX . 'Şimdi yumurtaları ayarlama zamanı!');
 						});
 						$player->sendForm($form);
-					}else{ // TODO : Arena sil
+					}else{
+						/** @var MenuOption[] $options */
+						$options = array_map(function(Arena $arena){
+							return new MenuOption($arena->getName());
+						}, EggWars::$arenas);
+						$form = new MenuForm('EggWars - Arena Sil', '', $options, function(Player $player, int $selectedOption) use($options): void{
+							$arena = EggWars::$arenas[$options[$selectedOption]->getText()] ?? null;
+							if($arena !== null){
+								$arena->delete();
+								unset(EggWars::$arenas[$options[$selectedOption]->getText()]);
+								$player->sendMessage(EggWars::PREFIX . 'Arena silindi!');
+							}
+						});
+						$player->sendForm($form);
 					}
 				}));
 			}else{

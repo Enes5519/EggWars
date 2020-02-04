@@ -78,11 +78,8 @@ class EggWars extends PluginBase{
 		}, 20);
 	}
 
-	/**
-	 * @return EggWars
-	 */
-	public static function getAPI() : EggWars{
-		return self::$api;
+	public static function getArenasPath() : string{
+		return self::$api->getDataFolder() . 'arenas' . DIRECTORY_SEPARATOR;
 	}
 
 	public static function getZipWorldPath() : string{

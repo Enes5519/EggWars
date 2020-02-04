@@ -6,11 +6,16 @@ namespace Enes5519\EggWars;
 
 use pocketmine\event\block\BlockBreakEvent;
 use pocketmine\event\block\SignChangeEvent;
+use pocketmine\event\entity\EntityDamageByEntityEvent;
+use pocketmine\event\entity\EntityDamageEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerDropItemEvent;
 use pocketmine\event\player\PlayerInteractEvent;
+use pocketmine\event\player\PlayerQuitEvent;
 use pocketmine\item\ItemIds;
+use pocketmine\Player;
 use pocketmine\tile\Sign;
+use pocketmine\utils\TextFormat;
 
 class EventListener implements Listener{
 
@@ -19,6 +24,14 @@ class EventListener implements Listener{
 
 	public function __construct(EggWars $api){
 		$this->api = $api;
+	}
+
+	public function onQuit(PlayerQuitEvent $event) : void{
+		$player = $event->getPlayer();
+
+		if(($arena = $this->api->getPlayerArena($player)) !== null){
+			$arena->quit($player);
+		}
 	}
 
 	public function onSignChange(SignChangeEvent $event) : void{
@@ -131,4 +144,39 @@ class EventListener implements Listener{
 		}
 	}
 
+	/**
+	 * @param EntityDamageEvent $event
+	 * @ignoreCancelled true
+	 */
+	public function onAttack(EntityDamageEvent $event) : void{
+		$player = $event->getEntity();
+
+		if($player instanceof Player and ($arena = $this->api->getPlayerArena($player)) !== null){
+			$dead = $event->getFinalDamage() >= $player->getHealth();
+			if($event instanceof EntityDamageByEntityEvent){
+				$damager = $event->getDamager();
+				if($damager instanceof Player){
+					if($arena->getTeam($damager) !== $arena->getTeam($player)){
+						if($dead){
+							if($arena->isBrokenEgg($player)){
+								$arena->quit($player, false);
+								$player->addTitle(TextFormat::RED . 'ELENDİN!');
+							}
+							$arena->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ', ' . $damager->getDisplayName() . TextFormat::GRAY . ' tarafından öldürüldü.');
+						}
+					}else{
+						$event->setCancelled();
+					}
+				}
+			}else{
+				if($dead){
+					if($arena->isBrokenEgg($player)){
+						$arena->quit($player, false);
+						$player->addTitle(TextFormat::RED . 'ELENDİN!');
+					}
+					$arena->broadcastMessage($player->getDisplayName() . ' öldü.');
+				}
+			}
+		}
+	}
 }
