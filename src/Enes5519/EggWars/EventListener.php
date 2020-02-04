@@ -57,7 +57,7 @@ class EventListener implements Listener{
 	public function onInteract(PlayerInteractEvent $event) : void{
 		$player = $event->getPlayer();
 
-		if($event->getAction() === PlayerInteractEvent::LEFT_CLICK_BLOCK){
+		if($event->getAction() === PlayerInteractEvent::RIGHT_CLICK_BLOCK){
 			if(isset(EggWars::$setup[$player->getLowerCaseName()])){
 				$setup = EggWars::$setup[$player->getLowerCaseName()];
 				if($setup->setPosition($player, $event->getBlock()->asVector3())){
@@ -67,7 +67,8 @@ class EventListener implements Listener{
 						Arena::CONFIG_TEAM_COUNT => $setup->teamCount,
 						Arena::CONFIG_PER_TEAM_PLAYER => $setup->perTeamPlayerCount,
 						Arena::CONFIG_EGG_POSITIONS => array_map([EggWars::class, 'hashVector3'], $setup->eggPositions),
-						Arena::CONFIG_SPAWN_POINTS => array_map([EggWars::class, 'hashVector3'], $setup->spawnPoints)
+						Arena::CONFIG_SPAWN_POINTS => array_map([EggWars::class, 'hashVector3'], $setup->spawnPoints),
+						Arena::CONFIG_WAITING_LOBBY => $setup->waitingLobby
 					], YAML_UTF8_ENCODING));
 
 					EggWars::$arenas[$setup->name] = new Arena($setup->name, $setup->waitingLobby, $setup->teamCount, $setup->perTeamPlayerCount, $setup->spawnPoints, $setup->eggPositions);
@@ -80,7 +81,7 @@ class EventListener implements Listener{
 				return;
 			}else{
 				$block = $event->getBlock();
-				if($block->getId() === ItemIds::SIGN_POST and $block->getId() === ItemIds::WALL_SIGN){
+				if($block->getId() === ItemIds::SIGN_POST or $block->getId() === ItemIds::WALL_SIGN){
 					$tile = $block->level->getTileAt($block->x, $block->y, $block->z);
 					if($tile instanceof Sign){
 						if($tile->getLine(0) === EggWars::SIGN_PREFIX){
@@ -161,7 +162,10 @@ class EventListener implements Listener{
 							if($arena->isBrokenEgg($player)){
 								$arena->quit($player, false);
 								$player->addTitle(TextFormat::RED . 'ELENDİN!');
+							}else{
+								$arena->teleportToBase($player);
 							}
+							$event->setCancelled();
 							$arena->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ', ' . $damager->getDisplayName() . TextFormat::GRAY . ' tarafından öldürüldü.');
 						}
 					}else{
@@ -173,6 +177,9 @@ class EventListener implements Listener{
 					if($arena->isBrokenEgg($player)){
 						$arena->quit($player, false);
 						$player->addTitle(TextFormat::RED . 'ELENDİN!');
+					}else{
+						$event->setCancelled();
+						$arena->teleportToBase($player);
 					}
 					$arena->broadcastMessage($player->getDisplayName() . ' öldü.');
 				}

@@ -7,10 +7,14 @@ namespace Enes5519\EggWars;
 use dktapps\pmforms\MenuForm;
 use dktapps\pmforms\MenuOption;
 use Enes5519\EggWars\task\MapResetAsyncTask;
+use jasonwynn10\ScoreboardAPI\Scoreboard;
+use jasonwynn10\ScoreboardAPI\ScoreboardAPI;
+use jasonwynn10\ScoreboardAPI\ScoreboardEntry;
 use pocketmine\form\Form;
 use pocketmine\item\ItemFactory;
 use pocketmine\item\ItemIds;
 use pocketmine\level\Level;
+use pocketmine\level\Position;
 use pocketmine\math\Vector3;
 use pocketmine\Player;
 use pocketmine\Server;
@@ -69,6 +73,11 @@ class Arena{
 	/** @var array */
 	private $brokenEggs = [];
 
+	/** @var Scoreboard */
+	private $scoreBoard;
+	/** @var ScoreboardEntry[] */
+	private $entries;
+
 	public function __construct(string $name, string $waitingLobbyName, int $teamCount, int $perTeamPlayerCount, array $spawnPoints, array $eggPositions){
 		Server::getInstance()->loadLevel($name);
 		Server::getInstance()->loadLevel($waitingLobbyName);
@@ -79,13 +88,18 @@ class Arena{
 		$this->perTeamPlayerCount = $perTeamPlayerCount;
 
 		$this->teams = self::TEAMS;
-		array_splice($this->teams, 0, $this->teamCount);
-		$this->teams = array_map(function(){ return 0; }, array_flip($this->teams));
+		$this->teams = array_map(function(){ return 0; }, array_splice($this->teams, 0, $this->teamCount));
 
 		$this->spawnPoints = array_combine(array_keys($this->teams), $spawnPoints);
 		$this->eggPositions = array_combine(array_keys($this->teams), $eggPositions);
 
 		$this->maxPlayers = $this->teamCount * $this->perTeamPlayerCount;
+
+		$this->scoreBoard = ScoreboardAPI::getInstance()->createScoreboard($this->getName(), TextFormat::GOLD . 'EggWars');
+		$line = 0;
+		foreach($this->teams as $team => $_){
+			$this->entries[$team] = $this->scoreBoard->createEntry($line++, 0, ScoreboardEntry::TYPE_FAKE_PLAYER, self::TEAMS[$team][0] . '■ ' . TextFormat::GRAY . $team);
+		}
 	}
 
 	public function getName() : string{
@@ -115,6 +129,12 @@ class Arena{
 			case self::STATUS_LOBBY:
 				$minPlayer = $this->teamCount;
 				if(count($this->players) >= $minPlayer){
+					if($this->time > 15){
+						if(count($this->players) === $this->getMaxPlayers()){
+							$this->time = 15;
+						}
+					}
+
 					if($this->time === 0){
 						$this->status = self::STATUS_GAME;
 						$this->time = 31 * 60;
@@ -123,10 +143,10 @@ class Arena{
 							/** @var Player $player */
 							$player = $playerData['player'];
 							$this->resetPlayer($player);
-							$player->teleport($this->spawnPoints[$playerData['team']]);
+							$player->teleport(Position::fromObject($this->spawnPoints[$playerData['team']], $this->arenaLevel));
 						}
 					}elseif($this->time % 15 == 0){
-						$this->broadcastMessage('Oyunun başlamasına ' . TextFormat::GREEN . $this->time . TextFormat::DARK_GRAY . ' saniye kaldı.');
+						$this->broadcastMessage('Oyunun başlamasına ' . TextFormat::GREEN . $this->time . TextFormat::GRAY . ' saniye kaldı.');
 					}
 
 					--$this->time;
@@ -169,7 +189,11 @@ class Arena{
 
 	public function restartCompleted() : void{
 		$this->restarted = false;
-		$this->teams = array_map(function(){ return 0; }, array_flip($this->teams));
+		$this->teams = array_map(function(){ return 0; }, $this->teams);
+		foreach($this->entries as $entry){
+			$entry->score = 0;
+			$this->scoreBoard->updateEntry($entry);
+		}
 		$this->brokenEggs = [];
 		$this->time = 60;
 		$this->status = self::STATUS_LOBBY;
@@ -215,12 +239,18 @@ class Arena{
 			return;
 		}
 
-		$team = array_shift($this->getAvailableTeams());
+		$team = key($this->getAvailableTeams());
 		$this->players[$player->getLowerCaseName()] = [
 			'player' => $player,
 			'team' => $team,
 		];
 		++$this->teams[$team];
+		$this->entries[$team]->score++;
+
+		foreach($this->entries as $entry){
+			$this->scoreBoard->addEntry($entry, [$player]);
+		}
+		ScoreboardAPI::getInstance()->sendScoreboard($this->scoreBoard, [$player]);
 		$player->setDisplayName(self::TEAMS[$team][0] . $player->getName());
 		$player->setNameTag($player->getDisplayName());
 
@@ -234,13 +264,20 @@ class Arena{
 	}
 
 	public function quit(Player $player, bool $message = true) : void{
-		--$this->teams[$this->players[$player->getLowerCaseName()]];
+		--$this->teams[$team = $this->getTeam($player)];
+		$this->entries[$team]->score--;
+		ScoreboardAPI::getInstance()->removeScoreboard($this->scoreBoard, [$player]);
 		unset($this->players[$player->getLowerCaseName()]);
 
 		if($message) $this->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ' oyundan ayrıldı.');
 
 		$this->resetPlayer($player);
 		$player->teleport($player->getServer()->getDefaultLevel()->getSpawnLocation());
+	}
+
+	public function teleportToBase(Player $player) : void{
+		$player->teleport($this->spawnPoints[$this->getTeam($player)]);
+		$this->resetPlayer($player, false);
 	}
 
 	public function isBrokenEgg(Player $player) : bool{
@@ -272,17 +309,25 @@ class Arena{
 		return false;
 	}
 
-	public function changeTeam(Player $player, string $team) : void{
-		if(isset($this->getAvailableTeams()[$team])){
+	public function changeTeam(Player $player, string $newTeam) : void{
+		$availableTeams = $this->getAvailableTeams();
+		if(!isset($availableTeams[$newTeam])){
 			$player->sendMessage(EggWars::PREFIX . 'Bu takım müsait değil.');
 			return;
 		}
 
-		--$this->teams[$this->getTeam($player)];
-		$this->players[$player->getLowerCaseName()]['team'] = $team;
-		++$this->teams[$teamName = $this->getTeam($player)];
+		if($this->getTeam($player) === $newTeam){
+			$player->sendMessage(EggWars::PREFIX . 'Zaten bu takımdasın');
+			return;
+		}
 
-		$player->sendMessage(EggWars::PREFIX . 'Takımınız ' . self::TEAMS[$teamName][0] . $teamName . TextFormat::GRAY . ' olarak değiştirildi.');
+		--$this->teams[$team = $this->getTeam($player)];
+		$this->entries[$team]->score--;
+		$this->players[$player->getLowerCaseName()]['team'] = $newTeam;
+		++$this->teams[$newTeam];
+		$this->entries[$newTeam]->score++;
+
+		$player->sendMessage(EggWars::PREFIX . 'Takımınız ' . self::TEAMS[$newTeam][0] . $newTeam . TextFormat::GRAY . ' olarak değiştirildi.');
 	}
 
 	public function getTeam(Player $player) : string{
@@ -310,7 +355,7 @@ class Arena{
 
 	public function getAvailableTeams() : array{
 		$availableTeam = array_filter($this->teams, function(string $number) : bool{
-			return $number < $this->teamCount;
+			return $number < $this->perTeamPlayerCount;
 		});
 		asort($availableTeam);
 
@@ -329,13 +374,6 @@ class Arena{
 				$this->changeTeam($player, array_keys($this->teams)[$selectedOption]);
 			}
 		});
-	}
-
-	public function delete() : void{
-		unlink(EggWars::getArenasPath() . $this->getName() . '.yml');
-		unlink(EggWars::getZipWorldPath() . $this->getName() . '.zip');
-
-		unset($this);
 	}
 
 	public static function fromArray(string $arenaName, array $data) : Arena{

@@ -37,7 +37,7 @@ class EggWarsCommand extends Command{
 						];
 						$form = new CustomForm('Arena Oluştur', $elements, function(Player $player, CustomFormResponse $response) : void{
 							$worldName = $response->getString('worldName');
-							$waitingLobbyName = $response->getString('waitingLobbyLevelName');
+							$waitingLobbyName = $response->getString('waitingLobbyName');
 
 							if(isset(EggWars::$arenas[$worldName])){
 								$player->sendMessage(EggWars::PREFIX . 'Böyle bir arena var zaten.');
@@ -60,7 +60,7 @@ class EggWarsCommand extends Command{
 							EggWars::$setup[$player->getLowerCaseName()] = new SetupArena($worldName, $waitingLobbyName, $teamCount, $perTeamPlayerCount);
 
 							$player->getServer()->loadLevel($worldName);
-							$player->teleport($player->getServer()->getLevelByName($worldName));
+							$player->teleport($player->getServer()->getLevelByName($worldName)->getSpawnLocation());
 							$player->sendMessage(EggWars::PREFIX . 'Şimdi yumurtaları ayarlama zamanı!');
 						});
 						$player->sendForm($form);
@@ -72,7 +72,8 @@ class EggWarsCommand extends Command{
 						$form = new MenuForm('EggWars - Arena Sil', '', $options, function(Player $player, int $selectedOption) use($options): void{
 							$arena = EggWars::$arenas[$options[$selectedOption]->getText()] ?? null;
 							if($arena !== null){
-								$arena->delete();
+								unlink(EggWars::getArenasPath() . $arena->getName() . '.yml');
+								unlink(EggWars::getZipWorldPath() . $arena->getName() . '.zip');
 								unset(EggWars::$arenas[$options[$selectedOption]->getText()]);
 								$player->sendMessage(EggWars::PREFIX . 'Arena silindi!');
 							}

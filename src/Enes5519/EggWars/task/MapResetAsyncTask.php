@@ -25,14 +25,14 @@ class MapResetAsyncTask extends AsyncTask{
 
 		$this->levelName = $level->getFolderName();
 		$this->zipPath = EggWars::getZipWorldPath() . $this->levelName . '.zip';
-		$this->worldsPath = $level->getServer()->getDataPath() . 'worlds' . DIRECTORY_SEPARATOR . $this->levelName;
+		$this->worldsPath = $level->getServer()->getDataPath() . 'worlds' . DIRECTORY_SEPARATOR;
 	}
 
 	/**
 	 * @inheritDoc
 	 */
 	public function onRun(){
-		$it = new RecursiveDirectoryIterator($this->worldsPath, RecursiveDirectoryIterator::SKIP_DOTS);
+		$it = new RecursiveDirectoryIterator($this->worldsPath . $this->levelName, RecursiveDirectoryIterator::SKIP_DOTS);
 		$files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
 		foreach($files as $file) {
 			if($file->isDir()){

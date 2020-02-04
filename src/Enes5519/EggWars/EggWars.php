@@ -11,7 +11,6 @@ use pocketmine\plugin\PluginBase;
 use pocketmine\scheduler\Task;
 use pocketmine\Server;
 use pocketmine\tile\Sign;
-use pocketmine\tile\Tile;
 use pocketmine\utils\TextFormat;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -48,9 +47,11 @@ class EggWars extends PluginBase{
 		foreach(glob($this->getDataFolder() . 'arenas' . DIRECTORY_SEPARATOR . '*.yml') as $arenaPath){
 			$arenaName = basename($arenaPath, '.yml');
 			if(file_exists($this->getDataFolder() . 'worlds' . DIRECTORY_SEPARATOR . $arenaName . '.zip')){
-				self::$arenas[$arenaName] = Arena::fromArray($arenaName, yaml_parse($arenaPath));
+				self::$arenas[$arenaName] = Arena::fromArray($arenaName, yaml_parse_file($arenaPath));
 			}
 		}
+
+		$this->getServer()->getPluginManager()->registerEvents(new EventListener($this), $this);
 
 		$this->getServer()->getCommandMap()->register('eggwars', new EggWarsCommand());
 
@@ -65,7 +66,7 @@ class EggWars extends PluginBase{
 			public function onRun(int $currentTick){
 				foreach(Server::getInstance()->getDefaultLevel()->getTiles() as $tile){
 					/** @var Sign $tile */
-					if($tile->getId() === Tile::SIGN){
+					if($tile instanceof Sign){
 						if($tile->getLine(0) === EggWars::SIGN_PREFIX){
 							$arena = EggWars::$arenas[$tile->getLine(1)] ?? null;
 							if($arena !== null){
@@ -121,6 +122,6 @@ class EggWars extends PluginBase{
 	}
 
 	public static function decodeVector3(string $hash) : Vector3{
-		return new Vector3(...explode(':', $hash));
+		return new Vector3(...array_map('intval', explode(':', $hash)));
 	}
 }
