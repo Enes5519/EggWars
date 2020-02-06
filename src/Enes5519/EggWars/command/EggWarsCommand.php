@@ -66,9 +66,9 @@ class EggWarsCommand extends Command{
 						$player->sendForm($form);
 					}else{
 						/** @var MenuOption[] $options */
-						$options = array_map(function(Arena $arena){
+						$options = array_values(array_map(function(Arena $arena){
 							return new MenuOption($arena->getName());
-						}, EggWars::$arenas);
+						}, EggWars::$arenas));
 						$form = new MenuForm('EggWars - Arena Sil', '', $options, function(Player $player, int $selectedOption) use($options): void{
 							$arena = EggWars::$arenas[$options[$selectedOption]->getText()] ?? null;
 							if($arena !== null){

@@ -7,9 +7,6 @@ namespace Enes5519\EggWars;
 use dktapps\pmforms\MenuForm;
 use dktapps\pmforms\MenuOption;
 use Enes5519\EggWars\task\MapResetAsyncTask;
-use jasonwynn10\ScoreboardAPI\Scoreboard;
-use jasonwynn10\ScoreboardAPI\ScoreboardAPI;
-use jasonwynn10\ScoreboardAPI\ScoreboardEntry;
 use pocketmine\form\Form;
 use pocketmine\item\ItemFactory;
 use pocketmine\item\ItemIds;
@@ -75,8 +72,6 @@ class Arena{
 
 	/** @var Scoreboard */
 	private $scoreBoard;
-	/** @var ScoreboardEntry[] */
-	private $entries;
 
 	public function __construct(string $name, string $waitingLobbyName, int $teamCount, int $perTeamPlayerCount, array $spawnPoints, array $eggPositions){
 		Server::getInstance()->loadLevel($name);
@@ -95,11 +90,7 @@ class Arena{
 
 		$this->maxPlayers = $this->teamCount * $this->perTeamPlayerCount;
 
-		$this->scoreBoard = ScoreboardAPI::getInstance()->createScoreboard($this->getName(), TextFormat::GOLD . 'EggWars');
-		$line = 0;
-		foreach($this->teams as $team => $_){
-			$this->entries[$team] = $this->scoreBoard->createEntry($line++, 0, ScoreboardEntry::TYPE_FAKE_PLAYER, self::TEAMS[$team][0] . '■ ' . TextFormat::GRAY . $team);
-		}
+		$this->scoreBoard = new Scoreboard($this->getName(), $this->teams);
 	}
 
 	public function getName() : string{
@@ -190,10 +181,7 @@ class Arena{
 	public function restartCompleted() : void{
 		$this->restarted = false;
 		$this->teams = array_map(function(){ return 0; }, $this->teams);
-		foreach($this->entries as $entry){
-			$entry->score = 0;
-			$this->scoreBoard->updateEntry($entry);
-		}
+		$this->scoreBoard->resetScores();
 		$this->brokenEggs = [];
 		$this->time = 60;
 		$this->status = self::STATUS_LOBBY;
@@ -250,13 +238,9 @@ class Arena{
 			'player' => $player,
 			'team' => $team,
 		];
-		++$this->teams[$team];
-		$this->entries[$team]->score++;
+		$this->scoreBoard->setScore($team, ++$this->teams[$team]);
+		$this->scoreBoard->send($player);
 
-		foreach($this->entries as $entry){
-			$this->scoreBoard->addEntry($entry, [$player]);
-		}
-		ScoreboardAPI::getInstance()->sendScoreboard($this->scoreBoard, [$player]);
 		$player->setDisplayName(self::TEAMS[$team][0] . $player->getName());
 		$player->setNameTag($player->getDisplayName());
 
@@ -270,9 +254,11 @@ class Arena{
 	}
 
 	public function quit(Player $player, bool $message = true) : void{
-		--$this->teams[$team = $this->getTeam($player)];
-		$this->entries[$team]->score--;
-		ScoreboardAPI::getInstance()->removeScoreboard($this->scoreBoard, [$player]);
+		$team = $this->getTeam($player);
+
+		$this->scoreBoard->remove($player);
+		$this->scoreBoard->setScore($team, --$this->teams[$team]);
+
 		unset($this->players[$player->getLowerCaseName()]);
 
 		if($message) $this->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ' oyundan ayrıldı.');
@@ -322,16 +308,15 @@ class Arena{
 			return;
 		}
 
-		if($this->getTeam($player) === $newTeam){
+		$team = $this->getTeam($player);
+		if($team === $newTeam){
 			$player->sendMessage(EggWars::PREFIX . 'Zaten bu takımdasın');
 			return;
 		}
 
-		--$this->teams[$team = $this->getTeam($player)];
-		$this->entries[$team]->score--;
+		$this->scoreBoard->setScore($team, --$this->teams[$team], false);
 		$this->players[$player->getLowerCaseName()]['team'] = $newTeam;
-		++$this->teams[$newTeam];
-		$this->entries[$newTeam]->score++;
+		$this->scoreBoard->setScore($team, ++$this->teams[$newTeam]);
 
 		$player->sendMessage(EggWars::PREFIX . 'Takımınız ' . self::TEAMS[$newTeam][0] . $newTeam . TextFormat::GRAY . ' olarak değiştirildi.');
 	}
