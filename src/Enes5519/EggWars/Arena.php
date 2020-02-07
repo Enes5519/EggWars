@@ -127,8 +127,8 @@ class Arena{
 					}
 
 					if($this->time === 0){
-						$this->status = self::STATUS_GAME;
 						$this->time = 31 * 60;
+						$this->status = self::STATUS_GAME;
 
 						foreach($this->players as $playerData){
 							/** @var Player $player */
@@ -152,12 +152,9 @@ class Arena{
 					$this->broadcastMessage('Oyunun bitmesine ' . ($this->time / 60) . ' dakika kaldı.');
 				}
 
-				$getTeams = [];
-				foreach($this->teams as $team => $count){
-					if($count >= 1){
-						$getTeams[] = $team;
-					}
-				}
+				$getTeams = array_filter($this->teams, function(int $count) : bool{
+					return $count > 0;
+				});
 
 				if(count($getTeams) <= 1){
 					$this->finish(array_shift($getTeams));
@@ -179,12 +176,12 @@ class Arena{
 	}
 
 	public function restartCompleted() : void{
-		$this->restarted = false;
 		$this->teams = array_map(function(){ return 0; }, $this->teams);
 		$this->scoreBoard->resetScores();
 		$this->brokenEggs = [];
 		$this->time = 60;
 		$this->status = self::STATUS_LOBBY;
+		$this->restarted = false;
 
 		foreach($this->waitingLobby->getEntities() as $entity){
 			$entity->flagForDespawn();
@@ -237,6 +234,7 @@ class Arena{
 		$this->players[$player->getLowerCaseName()] = [
 			'player' => $player,
 			'team' => $team,
+			'oldNameTag' => $player->getNameTag()
 		];
 		$this->scoreBoard->setScore($team, ++$this->teams[$team]);
 		$this->scoreBoard->send($player);
@@ -259,11 +257,12 @@ class Arena{
 		$this->scoreBoard->remove($player);
 		$this->scoreBoard->setScore($team, --$this->teams[$team]);
 
-		unset($this->players[$player->getLowerCaseName()]);
-
 		if($message) $this->broadcastMessage($player->getDisplayName() . TextFormat::GRAY . ' oyundan ayrıldı.');
 
 		$this->resetPlayer($player);
+
+		unset($this->players[$player->getLowerCaseName()]);
+
 		$player->teleport($player->getServer()->getDefaultLevel()->getSpawnLocation());
 	}
 
@@ -314,7 +313,7 @@ class Arena{
 			return;
 		}
 
-		$this->scoreBoard->setScore($team, --$this->teams[$team], false);
+		$this->scoreBoard->setScore($team, --$this->teams[$team]);
 		$this->players[$player->getLowerCaseName()]['team'] = $newTeam;
 		$this->scoreBoard->setScore($team, ++$this->teams[$newTeam]);
 
@@ -331,7 +330,7 @@ class Arena{
 		$player->getInventory()->clearAll();
 
 		if($nameTag){
-			$player->setNameTag($player->getName());
+			$player->setNameTag($this->players[$player->getLowerCaseName()]['oldNameTag']);
 			$player->setDisplayName($player->getName());
 		}
 	}

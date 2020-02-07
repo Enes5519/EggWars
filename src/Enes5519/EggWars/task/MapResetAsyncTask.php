@@ -24,6 +24,7 @@ class MapResetAsyncTask extends AsyncTask{
 		Server::getInstance()->unloadLevel($level);
 
 		$this->levelName = $level->getFolderName();
+		$level->getServer()->unloadLevel($level);
 		$this->zipPath = EggWars::getZipWorldPath() . $this->levelName . '.zip';
 		$this->worldsPath = $level->getServer()->getDataPath() . 'worlds' . DIRECTORY_SEPARATOR;
 	}
@@ -49,8 +50,6 @@ class MapResetAsyncTask extends AsyncTask{
 	}
 
 	public function onCompletion(Server $server){
-		parent::onCompletion($server);
-
 		$server->loadLevel($this->levelName);
 		EggWars::$arenas[$this->levelName]->restartCompleted();
 	}
