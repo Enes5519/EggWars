@@ -225,7 +225,9 @@ class EventListener implements Listener{
 		if($player instanceof Player){
 			if(($arena = $this->api->getPlayerArena($player)) !== null){
 				if($arena->getStatus() === Arena::STATUS_GAME){
-					$arena->quit($player);
+					if($event->getTarget()->getFolderName() !== $arena->getName()){
+						$arena->quit($player);
+					}
 				}
 			}
 		}

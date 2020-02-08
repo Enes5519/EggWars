@@ -133,7 +133,7 @@ class Arena{
 						foreach($this->players as $playerData){
 							/** @var Player $player */
 							$player = $playerData['player'];
-							$this->resetPlayer($player);
+							$this->resetPlayer($player, false);
 							$player->teleport(Position::fromObject($this->spawnPoints[$playerData['team']], $this->arenaLevel));
 						}
 					}elseif($this->time % 15 == 0){
@@ -157,7 +157,7 @@ class Arena{
 				});
 
 				if(count($getTeams) <= 1){
-					$this->finish(array_shift($getTeams));
+					$this->finish(key($getTeams));
 					return;
 				}
 
@@ -176,6 +176,7 @@ class Arena{
 	}
 
 	public function restartCompleted() : void{
+		$this->arenaLevel = Server::getInstance()->getLevelByName($this->getName());
 		$this->teams = array_map(function(){ return 0; }, $this->teams);
 		$this->scoreBoard->resetScores();
 		$this->brokenEggs = [];
@@ -301,21 +302,24 @@ class Arena{
 	}
 
 	public function changeTeam(Player $player, string $newTeam) : void{
-		$availableTeams = $this->getAvailableTeams();
-		if(!isset($availableTeams[$newTeam])){
-			$player->sendMessage(EggWars::PREFIX . 'Bu takım müsait değil.');
-			return;
-		}
-
 		$team = $this->getTeam($player);
 		if($team === $newTeam){
 			$player->sendMessage(EggWars::PREFIX . 'Zaten bu takımdasın');
 			return;
 		}
 
+		$availableTeams = $this->getAvailableTeams();
+		if(!isset($availableTeams[$newTeam])){
+			$player->sendMessage(EggWars::PREFIX . 'Bu takım müsait değil.');
+			return;
+		}
+
 		$this->scoreBoard->setScore($team, --$this->teams[$team]);
 		$this->players[$player->getLowerCaseName()]['team'] = $newTeam;
-		$this->scoreBoard->setScore($team, ++$this->teams[$newTeam]);
+		$this->scoreBoard->setScore($newTeam, ++$this->teams[$newTeam]);
+
+		$player->setDisplayName(self::TEAMS[$newTeam][0] . $player->getName());
+		$player->setNameTag($player->getDisplayName());
 
 		$player->sendMessage(EggWars::PREFIX . 'Takımınız ' . self::TEAMS[$newTeam][0] . $newTeam . TextFormat::GRAY . ' olarak değiştirildi.');
 	}

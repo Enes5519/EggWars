@@ -54,7 +54,7 @@ class Scoreboard{
 		if($send){
 			$pk = new SetScorePacket();
 			$pk->type = SetScorePacket::TYPE_CHANGE;
-			$pk->entries = [$this->entries[$team]];
+			$pk->entries = $this->entries;
 			Server::getInstance()->broadcastPacket($this->viewers, $pk);
 		}
 	}

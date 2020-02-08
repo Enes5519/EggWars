@@ -8,8 +8,6 @@ use Enes5519\EggWars\EggWars;
 use pocketmine\level\Level;
 use pocketmine\scheduler\AsyncTask;
 use pocketmine\Server;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 use ZipArchive;
 
 class MapResetAsyncTask extends AsyncTask{
@@ -21,8 +19,6 @@ class MapResetAsyncTask extends AsyncTask{
 	private $zipPath;
 
 	public function __construct(Level $level){
-		Server::getInstance()->unloadLevel($level);
-
 		$this->levelName = $level->getFolderName();
 		$level->getServer()->unloadLevel($level);
 		$this->zipPath = EggWars::getZipWorldPath() . $this->levelName . '.zip';
@@ -33,20 +29,22 @@ class MapResetAsyncTask extends AsyncTask{
 	 * @inheritDoc
 	 */
 	public function onRun(){
-		$it = new RecursiveDirectoryIterator($this->worldsPath . $this->levelName, RecursiveDirectoryIterator::SKIP_DOTS);
-		$files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
-		foreach($files as $file) {
-			if($file->isDir()){
-				rmdir($file->getRealPath());
-			}else{
-				unlink($file->getRealPath());
-			}
-		}
+		self::delDir($this->worldsPath . $this->levelName);
 
 		$zip = new ZipArchive();
 		$zip->open($this->zipPath);
 		$zip->extractTo($this->worldsPath);
 		$zip->close();
+	}
+
+	public static function delDir(string $path) : void{
+		foreach(scandir($path, SCANDIR_SORT_NONE) as $file){
+			if($file !== '.' and $file !== '..'){
+				is_dir($newPath = $path . DIRECTORY_SEPARATOR . $file) ? self::delDir($newPath) : unlink($newPath);
+			}
+		}
+
+		rmdir($path);
 	}
 
 	public function onCompletion(Server $server){
